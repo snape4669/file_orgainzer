@@ -153,13 +153,16 @@ class FileOrganizer:
                     self.status_var.set(f"正在处理: {filename}")
                     self.progress_var.set((i + 1) / total_files * 100)
                     
-                    # 检查文件名是否包含"修改后"
-                    if "修改后" in filename:
-                        target_folder_name = "修改后"
-                        target_folder_path = modified_folder_path
+                    if filename.endswith(".xlsx") or filename.endswith(".xls"):
+                        pass
                     else:
-                        target_folder_name = "原图"
-                        target_folder_path = original_folder_path
+                    # 检查文件名是否包含"修改后"
+                        if "修改后" or "增加" or "增加后"  or "拷贝" in filename:
+                            target_folder_name = "修改后"
+                            target_folder_path = modified_folder_path
+                        else:
+                            target_folder_name = "原图"
+                            target_folder_path = original_folder_path
                     
                     # 构建目标文件路径
                     target_file_path = os.path.join(target_folder_path, filename)
@@ -285,7 +288,7 @@ class FileOrganizer:
                 if os.path.isfile(file_path):
                     try:
                         # 检查文件名是否包含"修改后"
-                        if "修改后" in filename:
+                        if "修改后" or "增加" or "增加后"  or "拷贝" in filename:
                             # 这个文件应该放在"修改后"文件夹中
                             target_folder_name = "修改后"
                             target_folder_path = os.path.join(root_folder, target_folder_name)

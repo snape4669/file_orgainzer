@@ -27,7 +27,7 @@ jobs:
         
     - name: Build executable
       run: |
-        pyinstaller --onefile --name file_organizer file_organizer.py
+        pyinstaller --onefile --noconsole --name file_organizer file_organizer.py
         
     - name: Verify build output
       run: dir dist\  # Windows directory listing for debugging

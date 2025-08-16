@@ -158,6 +158,7 @@ class FileOrganizer:
                     
                     # Excel文件直接放置到根目录
                     if file_ext in ['.xlsx', '.xls']:
+                        self.log_message(f"处理Excel文件: {filename}")
                         target_folder_path = root_folder
                         target_folder_name = "根目录"
                         
@@ -165,27 +166,46 @@ class FileOrganizer:
                         target_file_path = os.path.join(target_folder_path, filename)
                         
                         # 检查目标文件是否已存在，如果存在则重命名
+                        final_filename = filename
                         if os.path.exists(target_file_path):
                             base_name, ext = os.path.splitext(filename)
                             counter = 1
                             while os.path.exists(target_file_path):
                                 new_filename = f"{base_name}_{counter}{ext}"
                                 target_file_path = os.path.join(target_folder_path, new_filename)
+                                final_filename = new_filename
                                 counter += 1
-                            self.log_message(f"Excel文件重命名: {filename} -> {os.path.basename(target_file_path)}")
+                            self.log_message(f"Excel文件重命名: {filename} -> {final_filename} (避免覆盖根目录中的同名文件)")
+                        else:
+                            self.log_message(f"Excel文件 {filename} 将直接移动到根目录")
                         
                         # 移动Excel文件到根目录
-                        shutil.move(file_path, target_file_path)
-                        self.log_message(f"移动Excel文件: {filename} -> 根目录 (来自: {os.path.relpath(source_folder, root_folder)})")
-                        processed_count += 1
+                        try:
+                            shutil.move(file_path, target_file_path)
+                            if final_filename != filename:
+                                self.log_message(f"✅ 成功移动Excel文件: {filename} -> 根目录/{final_filename} (来自: {os.path.relpath(source_folder, root_folder)})")
+                            else:
+                                self.log_message(f"✅ 成功移动Excel文件: {filename} -> 根目录 (来自: {os.path.relpath(source_folder, root_folder)})")
+                            processed_count += 1
+                        except Exception as e:
+                            self.log_message(f"❌ 移动Excel文件失败: {filename}, 错误: {str(e)}")
+                            raise
                         
                     else:
-                        # 其他文件按原有逻辑分类
-                        # 检查文件名是否包含"修改后"、"增加"、"增加后"或"拷贝"
-                        if any(keyword in filename for keyword in ["修改后", "增加", "增加后", "拷贝"]):
+                        # 其他文件按逻辑分类
+                        # 检查文件名是否包含指定关键词
+                        keywords = ["修改后", "增加", "增加后", "拷贝", "改后"]
+                        has_keywords = any(keyword in filename for keyword in keywords)
+                        
+                        # 检查文件名是否包含中文字符
+                        has_chinese = any('\u4e00' <= char <= '\u9fff' for char in filename)
+                        
+                        # 如果文件名包含关键词，或者包含中文字符，则放到"修改后"文件夹
+                        if has_keywords or has_chinese:
                             target_folder_name = "修改后"
                             target_folder_path = modified_folder_path
                         else:
+                            # 文件名中没有任何中文名称，也不包含关键词，放到"原图"文件夹
                             target_folder_name = "原图"
                             target_folder_path = original_folder_path
                         
@@ -250,7 +270,14 @@ class FileOrganizer:
                         # 检查文件是否已经在根文件夹的分类文件夹中
                         if self.is_file_in_root_classification_folders(item_path, root_folder):
                             # 如果文件已经在根文件夹的分类文件夹中，跳过
+                            self.log_message(f"跳过已分类文件: {item}")
                             continue
+                        
+                        # 检查是否是Excel文件
+                        file_ext = os.path.splitext(item)[1].lower()
+                        if file_ext in ['.xlsx', '.xls']:
+                            self.log_message(f"发现Excel文件: {item} (来自: {os.path.relpath(current_folder, root_folder)})")
+                        
                         # 收集文件信息：(文件路径, 文件名, 源文件夹)
                         all_files.append((item_path, item, current_folder))
                     elif os.path.isdir(item_path):
@@ -269,6 +296,7 @@ class FileOrganizer:
                 self.log_message(f"检查文件夹 {current_folder} 时出错: {str(e)}")
                 continue
         
+        self.log_message(f"总共收集到 {len(all_files)} 个文件需要处理")
         return all_files
     
     def is_file_in_root_classification_folders(self, file_path, root_folder):
@@ -332,8 +360,12 @@ class FileOrganizer:
                 # 跳过文件夹，只处理文件
                 if os.path.isfile(file_path):
                     try:
-                        # 检查文件名是否包含"修改后"
-                        if "修改后" or "增加" or "增加后"  or "拷贝" in filename:
+                        # 检查文件名是否包含指定关键词或中文字符
+                        keywords = ["修改后", "增加", "增加后", "拷贝", "改后"]
+                        has_keywords = any(keyword in filename for keyword in keywords)
+                        has_chinese = any('\u4e00' <= char <= '\u9fff' for char in filename)
+                        
+                        if has_keywords or has_chinese:
                             # 这个文件应该放在"修改后"文件夹中
                             target_folder_name = "修改后"
                             target_folder_path = os.path.join(root_folder, target_folder_name)

@@ -153,34 +153,59 @@ class FileOrganizer:
                     self.status_var.set(f"正在处理: {filename}")
                     self.progress_var.set((i + 1) / total_files * 100)
                     
-                    if filename.endswith(".xlsx") or filename.endswith(".xls"):
-                        pass
+                    # 检查文件扩展名
+                    file_ext = os.path.splitext(filename)[1].lower()
+                    
+                    # Excel文件直接放置到根目录
+                    if file_ext in ['.xlsx', '.xls']:
+                        target_folder_path = root_folder
+                        target_folder_name = "根目录"
+                        
+                        # 构建目标文件路径
+                        target_file_path = os.path.join(target_folder_path, filename)
+                        
+                        # 检查目标文件是否已存在，如果存在则重命名
+                        if os.path.exists(target_file_path):
+                            base_name, ext = os.path.splitext(filename)
+                            counter = 1
+                            while os.path.exists(target_file_path):
+                                new_filename = f"{base_name}_{counter}{ext}"
+                                target_file_path = os.path.join(target_folder_path, new_filename)
+                                counter += 1
+                            self.log_message(f"Excel文件重命名: {filename} -> {os.path.basename(target_file_path)}")
+                        
+                        # 移动Excel文件到根目录
+                        shutil.move(file_path, target_file_path)
+                        self.log_message(f"移动Excel文件: {filename} -> 根目录 (来自: {os.path.relpath(source_folder, root_folder)})")
+                        processed_count += 1
+                        
                     else:
-                    # 检查文件名是否包含"修改后"
-                        if "修改后" or "增加" or "增加后"  or "拷贝" in filename:
+                        # 其他文件按原有逻辑分类
+                        # 检查文件名是否包含"修改后"、"增加"、"增加后"或"拷贝"
+                        if any(keyword in filename for keyword in ["修改后", "增加", "增加后", "拷贝"]):
                             target_folder_name = "修改后"
                             target_folder_path = modified_folder_path
                         else:
                             target_folder_name = "原图"
                             target_folder_path = original_folder_path
-                    
-                    # 构建目标文件路径
-                    target_file_path = os.path.join(target_folder_path, filename)
-                    
-                    # 检查目标文件是否已存在，如果存在则重命名
-                    if os.path.exists(target_file_path):
-                        base_name, ext = os.path.splitext(filename)
-                        counter = 1
-                        while os.path.exists(target_file_path):
-                            new_filename = f"{base_name}_{counter}{ext}"
-                            target_file_path = os.path.join(target_folder_path, new_filename)
-                            counter += 1
-                        self.log_message(f"文件重命名: {filename} -> {os.path.basename(target_file_path)}")
-                    
-                    # 移动文件
-                    shutil.move(file_path, target_file_path)
-                    self.log_message(f"移动文件: {filename} -> {target_folder_name}/ (来自: {os.path.relpath(source_folder, root_folder)})")
-                    processed_count += 1
+                        
+                        # 构建目标文件路径
+                        target_file_path = os.path.join(target_folder_path, filename)
+                        
+                        # 检查目标文件是否已存在，如果存在则重命名
+                        if os.path.exists(target_file_path):
+                            base_name, ext = os.path.splitext(filename)
+                            counter = 1
+                            while os.path.exists(target_file_path):
+                                new_filename = f"{base_name}_{counter}{ext}"
+                                target_file_path = os.path.join(target_folder_path, new_filename)
+                                counter += 1
+                            self.log_message(f"文件重命名: {filename} -> {os.path.basename(target_file_path)}")
+                        
+                        # 移动文件
+                        shutil.move(file_path, target_file_path)
+                        self.log_message(f"移动文件: {filename} -> {target_folder_name}/ (来自: {os.path.relpath(source_folder, root_folder)})")
+                        processed_count += 1
                     
                 except Exception as e:
                     self.log_message(f"处理文件 {filename} 时出错: {str(e)}")
@@ -222,9 +247,9 @@ class FileOrganizer:
                 for item in items:
                     item_path = os.path.join(current_folder, item)
                     if os.path.isfile(item_path):
-                        # 跳过根文件夹中已存在的分类文件夹内的文件
-                        if (current_folder == root_folder and 
-                            (os.path.basename(os.path.dirname(item_path)) in ["原图", "修改后"])):
+                        # 检查文件是否已经在根文件夹的分类文件夹中
+                        if self.is_file_in_root_classification_folders(item_path, root_folder):
+                            # 如果文件已经在根文件夹的分类文件夹中，跳过
                             continue
                         # 收集文件信息：(文件路径, 文件名, 源文件夹)
                         all_files.append((item_path, item, current_folder))
@@ -245,6 +270,26 @@ class FileOrganizer:
                 continue
         
         return all_files
+    
+    def is_file_in_root_classification_folders(self, file_path, root_folder):
+        """检查文件是否已经在根文件夹的分类文件夹中"""
+        try:
+            # 获取文件的父文件夹
+            parent_folder = os.path.dirname(file_path)
+            
+            # 检查父文件夹是否是根文件夹
+            if parent_folder == root_folder:
+                # 检查父文件夹的父文件夹是否是根文件夹的分类文件夹
+                grandparent_folder = os.path.dirname(parent_folder)
+                if grandparent_folder == root_folder:
+                    # 检查父文件夹名称是否是分类文件夹
+                    parent_name = os.path.basename(parent_folder)
+                    if parent_name in ["原图", "修改后"]:
+                        return True
+            
+            return False
+        except Exception:
+            return False
     
     def is_classification_folder(self, folder_path):
         """检查文件夹是否已经是分类文件夹（包含"原图"或"修改后"文件夹）"""

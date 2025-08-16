@@ -173,15 +173,8 @@ class FileOrganizer:
                         target_file_path = os.path.join(target_folder_path, filename)
                         
                         # 检查目标文件是否已存在，如果存在则重命名
-                        final_filename = filename
-                        if os.path.exists(target_file_path):
-                            base_name, ext = os.path.splitext(filename)
-                            counter = 1
-                            while os.path.exists(target_file_path):
-                                new_filename = f"{base_name}_{counter}{ext}"
-                                target_file_path = os.path.join(target_folder_path, new_filename)
-                                final_filename = new_filename
-                                counter += 1
+                        target_file_path, final_filename = self.generate_unique_filename(target_folder_path, filename)
+                        if final_filename != filename:
                             self.log_message(f"Excel文件重命名: {filename} -> {final_filename} (避免覆盖根目录中的同名文件)")
                         else:
                             self.log_message(f"Excel文件 {filename} 将直接移动到根目录")
@@ -220,14 +213,9 @@ class FileOrganizer:
                         target_file_path = os.path.join(target_folder_path, filename)
                         
                         # 检查目标文件是否已存在，如果存在则重命名
-                        if os.path.exists(target_file_path):
-                            base_name, ext = os.path.splitext(filename)
-                            counter = 1
-                            while os.path.exists(target_file_path):
-                                new_filename = f"{base_name}_{counter}{ext}"
-                                target_file_path = os.path.join(target_folder_path, new_filename)
-                                counter += 1
-                            self.log_message(f"文件重命名: {filename} -> {os.path.basename(target_file_path)}")
+                        target_file_path, final_filename = self.generate_unique_filename(target_folder_path, filename)
+                        if final_filename != filename:
+                            self.log_message(f"文件重命名: {filename} -> {final_filename} (避免覆盖同名文件)")
                         
                         # 移动文件
                         shutil.move(file_path, target_file_path)
@@ -264,14 +252,9 @@ class FileOrganizer:
                     target_file_path = os.path.join(target_folder_path, filename)
                     
                     # 检查目标文件是否已存在，如果存在则重命名
-                    if os.path.exists(target_file_path):
-                        base_name, ext = os.path.splitext(filename)
-                        counter = 1
-                        while os.path.exists(target_file_path):
-                            new_filename = f"{base_name}_{counter}{ext}"
-                            target_file_path = os.path.join(target_folder_path, new_filename)
-                            counter += 1
-                        self.log_message(f"文件重命名: {filename} -> {os.path.basename(target_file_path)}")
+                    target_file_path, final_filename = self.generate_unique_filename(target_folder_path, filename)
+                    if final_filename != filename:
+                        self.log_message(f"文件重命名: {filename} -> {final_filename} (避免覆盖同名文件)")
                     
                     # 移动文件
                     shutil.move(file_path, target_file_path)
@@ -291,6 +274,35 @@ class FileOrganizer:
             
         finally:
             self.organize_btn.config(state="normal")
+    
+    def generate_unique_filename(self, target_folder, filename):
+        """生成唯一的文件名，避免覆盖同名文件
+        
+        Args:
+            target_folder: 目标文件夹路径
+            filename: 原始文件名
+            
+        Returns:
+            tuple: (完整的目标文件路径, 最终文件名)
+        """
+        # 构建目标文件路径
+        target_file_path = os.path.join(target_folder, filename)
+        
+        # 如果目标文件不存在，直接返回
+        if not os.path.exists(target_file_path):
+            return target_file_path, filename
+        
+        # 如果目标文件存在，需要重命名
+        base_name, ext = os.path.splitext(filename)
+        counter = 1
+        
+        # 循环查找可用的文件名
+        while os.path.exists(target_file_path):
+            new_filename = f"{base_name}_{counter}{ext}"
+            target_file_path = os.path.join(target_folder, new_filename)
+            counter += 1
+        
+        return target_file_path, os.path.basename(target_file_path)
     
     def get_all_files_to_process(self, root_folder):
         """获取所有需要处理的文件，收集到根文件夹的分类文件夹中"""

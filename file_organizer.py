@@ -273,17 +273,16 @@ class FileOrganizer:
                             self.log_message(f"跳过已分类文件: {item}")
                             continue
                         
-                        # 检查是否是Excel文件
-                        file_ext = os.path.splitext(item)[1].lower()
-                        if file_ext in ['.xlsx', '.xls']:
-                            self.log_message(f"发现Excel文件: {item} (来自: {os.path.relpath(current_folder, root_folder)})")
-                        
                         # 收集文件信息：(文件路径, 文件名, 源文件夹)
                         all_files.append((item_path, item, current_folder))
                     elif os.path.isdir(item_path):
-                        # 跳过分类文件夹本身
-                        if os.path.basename(item_path) not in ["原图", "修改后"]:
-                            subdirs.append(item_path)
+                        # 对于分类文件夹，我们仍然需要处理其中的文件
+                        # 但标记为来自分类文件夹
+                        if os.path.basename(item_path) in ["原图", "修改后"]:
+                            self.log_message(f"发现分类文件夹: {os.path.relpath(item_path, root_folder)}")
+                        
+                        # 所有子文件夹都需要添加到队列中，包括分类文件夹
+                        subdirs.append(item_path)
                 
                 # 将子文件夹添加到队列中
                 for subdir in subdirs:
@@ -305,15 +304,31 @@ class FileOrganizer:
             # 获取文件的父文件夹
             parent_folder = os.path.dirname(file_path)
             
-            # 检查父文件夹是否是根文件夹
+            # 如果父文件夹就是根文件夹，检查是否是分类文件夹
             if parent_folder == root_folder:
-                # 检查父文件夹的父文件夹是否是根文件夹的分类文件夹
-                grandparent_folder = os.path.dirname(parent_folder)
-                if grandparent_folder == root_folder:
-                    # 检查父文件夹名称是否是分类文件夹
-                    parent_name = os.path.basename(parent_folder)
-                    if parent_name in ["原图", "修改后"]:
+                # 检查父文件夹名称是否是分类文件夹
+                parent_name = os.path.basename(parent_folder)
+                if parent_name in ["原图", "修改后"]:
+                    return True
+                return False
+            
+            # 检查是否在根文件夹的分类文件夹中（通过路径比较）
+            try:
+                relative_path = os.path.relpath(file_path, root_folder)
+                path_parts = relative_path.split(os.sep)
+                
+                # 如果路径的第一部分是分类文件夹名称，则文件已经在根文件夹的分类文件夹中
+                # 但是，如果路径长度大于2，说明文件在嵌套的分类文件夹中，需要处理
+                if len(path_parts) >= 2 and path_parts[0] in ["原图", "修改后"]:
+                    # 如果路径长度正好是2，说明文件在根目录的直接分类文件夹中
+                    if len(path_parts) == 2:
                         return True
+                    # 如果路径长度大于2，说明文件在嵌套的分类文件夹中，需要处理
+                    else:
+                        return False
+            except ValueError:
+                # 如果无法计算相对路径，使用绝对路径检查
+                pass
             
             return False
         except Exception:

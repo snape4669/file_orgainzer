@@ -131,7 +131,7 @@ class FileOrganizer:
             
             # 在根文件夹中创建分类文件夹（如果不存在）
             original_folder_path = os.path.join(root_folder, "原图")
-            modified_folder_path = os.path.join(root_folder, "修改后")
+            modified_folder_path = os.path.join(root_folder, "处理图")
             
             if not os.path.exists(original_folder_path):
                 os.makedirs(original_folder_path)
@@ -141,14 +141,20 @@ class FileOrganizer:
                 
             if not os.path.exists(modified_folder_path):
                 os.makedirs(modified_folder_path)
-                self.log_message(f"在根文件夹中创建: 修改后/")
+                self.log_message(f"在根文件夹中创建: 处理图/")
             else:
-                self.log_message(f"根文件夹中已存在: 修改后/")
+                self.log_message(f"根文件夹中已存在: 处理图/")
             
-            # 处理所有文件
+            # 首先处理所有Excel文件，确保它们被移动到根目录
+            excel_files = [(fp, fn, sf) for fp, fn, sf in all_files if os.path.splitext(fn)[1].lower() in ['.xlsx', '.xls']]
+            other_files = [(fp, fn, sf) for fp, fn, sf in all_files if os.path.splitext(fn)[1].lower() not in ['.xlsx', '.xls']]
+            
+            self.log_message(f"发现 {len(excel_files)} 个Excel文件，{len(other_files)} 个其他文件")
+            
+            # 处理Excel文件
             processed_count = 0
             
-            for i, (file_path, filename, source_folder) in enumerate(all_files):
+            for i, (file_path, filename, source_folder) in enumerate(excel_files):
                 try:
                     self.status_var.set(f"正在处理: {filename}")
                     self.progress_var.set((i + 1) / total_files * 100)
@@ -158,7 +164,8 @@ class FileOrganizer:
                     
                     # Excel文件直接放置到根目录
                     if file_ext in ['.xlsx', '.xls']:
-                        self.log_message(f"处理Excel文件: {filename}")
+                        self.log_message(f"🔍 发现Excel文件: {filename} (来自: {os.path.relpath(source_folder, root_folder)})")
+                        self.log_message(f"📁 文件路径: {file_path}")
                         target_folder_path = root_folder
                         target_folder_name = "根目录"
                         
@@ -200,9 +207,9 @@ class FileOrganizer:
                         # 检查文件名是否包含中文字符
                         has_chinese = any('\u4e00' <= char <= '\u9fff' for char in filename)
                         
-                        # 如果文件名包含关键词，或者包含中文字符，则放到"修改后"文件夹
+                        # 如果文件名包含关键词，或者包含中文字符，则放到"处理图"文件夹
                         if has_keywords or has_chinese:
-                            target_folder_name = "修改后"
+                            target_folder_name = "处理图"
                             target_folder_path = modified_folder_path
                         else:
                             # 文件名中没有任何中文名称，也不包含关键词，放到"原图"文件夹
@@ -226,6 +233,50 @@ class FileOrganizer:
                         shutil.move(file_path, target_file_path)
                         self.log_message(f"移动文件: {filename} -> {target_folder_name}/ (来自: {os.path.relpath(source_folder, root_folder)})")
                         processed_count += 1
+                    
+                except Exception as e:
+                    self.log_message(f"处理文件 {filename} 时出错: {str(e)}")
+            
+            # 处理其他文件
+            self.log_message(f"开始处理其他文件...")
+            for i, (file_path, filename, source_folder) in enumerate(other_files):
+                try:
+                    self.status_var.set(f"正在处理: {filename}")
+                    self.progress_var.set((i + 1) / len(other_files) * 100)
+                    
+                    # 检查文件名是否包含指定关键词
+                    keywords = ["修改后", "增加", "增加后", "拷贝", "改后"]
+                    has_keywords = any(keyword in filename for keyword in keywords)
+                    
+                    # 检查文件名是否包含中文字符
+                    has_chinese = any('\u4e00' <= char <= '\u9fff' for char in filename)
+                    
+                    # 如果文件名包含关键词，或者包含中文字符，则放到"处理图"文件夹
+                    if has_keywords or has_chinese:
+                        target_folder_name = "处理图"
+                        target_folder_path = modified_folder_path
+                    else:
+                        # 文件名中没有任何中文名称，也不包含关键词，放到"原图"文件夹
+                        target_folder_name = "原图"
+                        target_folder_path = original_folder_path
+                    
+                    # 构建目标文件路径
+                    target_file_path = os.path.join(target_folder_path, filename)
+                    
+                    # 检查目标文件是否已存在，如果存在则重命名
+                    if os.path.exists(target_file_path):
+                        base_name, ext = os.path.splitext(filename)
+                        counter = 1
+                        while os.path.exists(target_file_path):
+                            new_filename = f"{base_name}_{counter}{ext}"
+                            target_file_path = os.path.join(target_folder_path, new_filename)
+                            counter += 1
+                        self.log_message(f"文件重命名: {filename} -> {os.path.basename(target_file_path)}")
+                    
+                    # 移动文件
+                    shutil.move(file_path, target_file_path)
+                    self.log_message(f"移动文件: {filename} -> {target_folder_name}/ (来自: {os.path.relpath(source_folder, root_folder)})")
+                    processed_count += 1
                     
                 except Exception as e:
                     self.log_message(f"处理文件 {filename} 时出错: {str(e)}")
@@ -273,15 +324,22 @@ class FileOrganizer:
                             self.log_message(f"跳过已分类文件: {item}")
                             continue
                         
+                        # 检查是否是Excel文件
+                        file_ext = os.path.splitext(item)[1].lower()
+                        if file_ext in ['.xlsx', '.xls']:
+                            self.log_message(f"📊 收集Excel文件: {item} (来自: {os.path.relpath(current_folder, root_folder)})")
+                        
                         # 收集文件信息：(文件路径, 文件名, 源文件夹)
                         all_files.append((item_path, item, current_folder))
                     elif os.path.isdir(item_path):
                         # 对于分类文件夹，我们仍然需要处理其中的文件
                         # 但标记为来自分类文件夹
-                        if os.path.basename(item_path) in ["原图", "修改后"]:
+                        if os.path.basename(item_path) in ["原图", "处理图"]:
                             self.log_message(f"发现分类文件夹: {os.path.relpath(item_path, root_folder)}")
                         
                         # 所有子文件夹都需要添加到队列中，包括分类文件夹
+                        # 这样可以确保嵌套分类文件夹中的文件也能被处理
+                        # 但是，我们需要特别标记这些文件，确保Excel文件被正确处理
                         subdirs.append(item_path)
                 
                 # 将子文件夹添加到队列中
@@ -308,7 +366,7 @@ class FileOrganizer:
             if parent_folder == root_folder:
                 # 检查父文件夹名称是否是分类文件夹
                 parent_name = os.path.basename(parent_folder)
-                if parent_name in ["原图", "修改后"]:
+                if parent_name in ["原图", "处理图"]:
                     return True
                 return False
             
@@ -319,7 +377,7 @@ class FileOrganizer:
                 
                 # 如果路径的第一部分是分类文件夹名称，则文件已经在根文件夹的分类文件夹中
                 # 但是，如果路径长度大于2，说明文件在嵌套的分类文件夹中，需要处理
-                if len(path_parts) >= 2 and path_parts[0] in ["原图", "修改后"]:
+                if len(path_parts) >= 2 and path_parts[0] in ["原图", "处理图"]:
                     # 如果路径长度正好是2，说明文件在根目录的直接分类文件夹中
                     if len(path_parts) == 2:
                         return True
@@ -335,7 +393,7 @@ class FileOrganizer:
             return False
     
     def is_classification_folder(self, folder_path):
-        """检查文件夹是否已经是分类文件夹（包含"原图"或"修改后"文件夹）"""
+        """检查文件夹是否已经是分类文件夹（包含"原图"或"处理图"文件夹）"""
         if not os.path.exists(folder_path):
             return False
             
@@ -343,15 +401,15 @@ class FileOrganizer:
             items = os.listdir(folder_path)
             # 检查是否包含分类文件夹
             has_original = "原图" in items and os.path.isdir(os.path.join(folder_path, "原图"))
-            has_modified = "修改后" in items and os.path.isdir(os.path.join(folder_path, "修改后"))
+            has_modified = "处理图" in items and os.path.isdir(os.path.join(folder_path, "处理图"))
             
             # 如果包含任何一个分类文件夹，就认为是分类文件夹
             if has_original or has_modified:
                 return True
                 
-            # 额外检查：如果文件夹名称本身就是"原图"或"修改后"，也认为是分类文件夹
+            # 额外检查：如果文件夹名称本身就是"原图"或"处理图"，也认为是分类文件夹
             folder_name = os.path.basename(folder_path)
-            if folder_name in ["原图", "修改后"]:
+            if folder_name in ["原图", "处理图"]:
                 return True
                 
             return False
@@ -381,11 +439,11 @@ class FileOrganizer:
                         has_chinese = any('\u4e00' <= char <= '\u9fff' for char in filename)
                         
                         if has_keywords or has_chinese:
-                            # 这个文件应该放在"修改后"文件夹中
-                            target_folder_name = "修改后"
+                            # 这个文件应该放在"处理图"文件夹中
+                            target_folder_name = "处理图"
                             target_folder_path = os.path.join(root_folder, target_folder_name)
                             
-                            # 如果"修改后"文件夹不存在，则创建
+                            # 如果"处理图"文件夹不存在，则创建
                             if not os.path.exists(target_folder_path):
                                 os.makedirs(target_folder_path)
                                 self.log_message(f"创建文件夹: {target_folder_name}")

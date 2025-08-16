@@ -3,11 +3,15 @@ name: Build Executable
 on:
   push:
     tags:
-      - 'v*'  # 触发条件：当打上v开头的tag时触发
+      - 'v*'
 
 jobs:
   build:
     runs-on: windows-latest
+    # Add necessary permissions for releases
+    permissions:
+      contents: write
+      releases: write
 
     steps:
     - uses: actions/checkout@v4
@@ -26,8 +30,11 @@ jobs:
       run: |
         pyinstaller --onefile --name file_organizer file_organizer.py
         
+    - name: Verify build output
+      run: dir dist\  # Windows command to list files (debugging)
+      
     - name: Upload release
       uses: softprops/action-gh-release@v1
       with:
-        files: dist/file_orgainzer.exe
+        files: dist/file_organizer.exe  # Fixed spelling
       if: startsWith(github.ref, 'refs/tags/')
